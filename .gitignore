@@ -1,0 +1,40 @@
+# --- AI assistant / tooling artifacts (never publish) ---
+.claude/
+.cursor/
+CLAUDE.md
+**/CLAUDE.md
+.aider*
+.anthropic/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.python-version
+
+# --- Model weights & large binaries (kept out of git; downloaded on demand) ---
+*.pt
+*.onnx
+*.engine
+yolov8*.pt
+
+# --- Runtime output ---
+snapshots/
+recordings/
+reports/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# --- OS / editor cruft ---
+.DS_Store
+.idea/
+.vscode/
+*.swp

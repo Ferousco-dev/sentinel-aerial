@@ -1,0 +1,11 @@
+# Core video + AI stack for the AI Aerial Surveillance & Response System
+opencv-python>=4.8.0
+numpy>=1.24.0
+mss>=9.0.1
+
+# Added in later steps (safe to install now):
+ultralytics>=8.1.0      # Step 3 - YOLOv8n detection
+fastapi>=0.110.0        # Step 5 - dashboard backend
+uvicorn>=0.29.0         # Step 5 - ASGI server
+websockets>=12.0        # Step 5 - live streaming
+requests>=2.31.0        # Step 6 - Telegram notifications
