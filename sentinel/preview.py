@@ -22,6 +22,7 @@ from .config import CaptureConfig, DetectConfig, EnhanceConfig, LogConfig
 from .dedup import CooldownFilter
 from .detect import Detector, DetectorUnavailable
 from .scheduler import DetectionScheduler
+from .zones import ZoneMonitor, draw_zones
 from .enhance import FrameEnhancer
 from .eventlog import EventLog
 from .logging_config import get_logger
@@ -56,6 +57,7 @@ def run_preview(
     detect_enabled: bool = False,
     log_config: LogConfig | None = None,
     log_enabled: bool = False,
+    zones: tuple = (),
 ) -> None:
     """Blocking preview loop. Returns when the operator presses ``q``.
 
@@ -79,6 +81,8 @@ def run_preview(
     # Cooldown de-dup sits between detection and the log writer.
     dedup = (CooldownFilter(log_cfg.cooldown_s)
              if log_enabled and log_cfg.dedup_enabled else None)
+    monitor = ZoneMonitor(zones) if zones else None
+    prev_breached: set[str] = set()
     do_enhance = enhance_enabled
     do_detect = detect_enabled or log_enabled
     do_compare = False
@@ -124,6 +128,18 @@ def run_preview(
                                   if dedup is not None else detections)
                         if to_log:
                             event_log.write_many(to_log)
+
+                # Zone-breach overlay + edge-triggered console alert.
+                if monitor is not None:
+                    breaches = monitor.check(detections, time.time())
+                    breached = monitor.breached_zone_names(breaches)
+                    processed = draw_zones(processed, zones, breached)
+                    for b in breaches:
+                        if b.zone_name not in prev_breached:
+                            _log.warning(
+                                "ZONE BREACH: %s in '%s' (%.0f%% overlap)",
+                                b.cls_name, b.zone_name, b.overlap * 100)
+                    prev_breached = breached
 
                 rate = fps.tick()
 

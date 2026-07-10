@@ -25,12 +25,14 @@ from .config import (
     EnhanceQuality,
     LogConfig,
     SourceKind,
+    Zone,
 )
 from .dedup import CooldownFilter, DedupStats
 from .detect import Detection, Detector, DetectorUnavailable, filter_by_class
 from .scheduler import DetectionScheduler, ScheduleStats
 from .enhance import FrameEnhancer, benchmark, enhance_frame
 from .eventlog import EventLog, SessionSummary
+from .zones import BreachEvent, ZoneMonitor, draw_zones
 from .video import (
     FrameSource,
     ScreenSource,
@@ -49,6 +51,10 @@ __all__ = [
     "EnhanceQuality",
     "LogConfig",
     "SourceKind",
+    "Zone",
+    "ZoneMonitor",
+    "BreachEvent",
+    "draw_zones",
     "Detector",
     "Detection",
     "DetectorUnavailable",

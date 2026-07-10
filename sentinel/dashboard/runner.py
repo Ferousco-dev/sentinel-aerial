@@ -20,6 +20,7 @@ from ..eventlog import EventLog
 from ..logging_config import get_logger
 from ..scheduler import DetectionScheduler
 from ..video import open_source
+from ..zones import ZoneMonitor, draw_zones
 from .state import LiveState
 
 _log = get_logger("sentinel.dashboard.runner")
@@ -61,6 +62,8 @@ class PipelineRunner:
         event_log = EventLog(cfg.log) if cfg.log_events else None
         dedup = (CooldownFilter(cfg.log.cooldown_s)
                  if cfg.log_events and cfg.log.dedup_enabled else None)
+        monitor = ZoneMonitor(cfg.zones) if cfg.zones else None
+        prev_breached: set[str] = set()
 
         try:
             source = open_source(
@@ -100,6 +103,18 @@ class PipelineRunner:
                                 event_log.write_many(to_log)
                                 self._publish_events(to_log)
 
+                    # Zone-breach evaluation + overlay (every frame, so the red
+                    # alert persists while a breach is active).
+                    if monitor is not None:
+                        breaches = monitor.check(detections, time.time())
+                        breached = monitor.breached_zone_names(breaches)
+                        frame = draw_zones(frame, cfg.zones, breached)
+                        newly = breached - prev_breached
+                        if newly:
+                            self._publish_breaches(
+                                [b for b in breaches if b.zone_name in newly])
+                        prev_breached = breached
+
                     frames += 1
                     now = time.monotonic()
                     if now - last_t >= 0.5:
@@ -122,6 +137,17 @@ class PipelineRunner:
             {"ts": stamp, "cls_name": d.cls_name,
              "confidence": round(d.confidence, 3), "bbox": list(d.bbox)}
             for d in detections
+        ])
+
+    def _publish_breaches(self, breaches) -> None:
+        for b in breaches:
+            _log.warning("ZONE BREACH: %s in '%s' (%.0f%% overlap)",
+                         b.cls_name, b.zone_name, b.overlap * 100)
+        self._state.publish_events([
+            {"kind": "breach", "ts": b.ts, "zone": b.zone_name,
+             "cls_name": b.cls_name, "confidence": round(b.confidence, 3),
+             "overlap": round(b.overlap, 3), "bbox": list(b.bbox)}
+            for b in breaches
         ])
 
     def _stats(self, fps, det_count, enhancer, event_log) -> dict:

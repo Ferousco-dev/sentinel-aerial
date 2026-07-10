@@ -273,6 +273,39 @@ class DashboardConfig:
 
 
 @dataclass(frozen=True)
+class Zone:
+    """A rectangular restricted area in pixel coordinates.
+
+    Defined here (rather than in ``zones.py``) so :class:`AppConfig` can hold
+    zones without a config→zones→detect→config import cycle. A detection of a
+    ``trigger_classes`` class breaches the zone when its bbox overlaps the
+    rectangle by at least ``min_overlap`` (fraction of the detection's area).
+    """
+
+    name: str
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+    trigger_classes: tuple[str, ...] = ("person",)
+    min_overlap: float = 0.0  # 0.0 = any pixel of overlap breaches
+
+    def __post_init__(self) -> None:
+        if self.x2 <= self.x1 or self.y2 <= self.y1:
+            raise ValueError("Zone requires x2 > x1 and y2 > y1.")
+        if not 0.0 <= self.min_overlap <= 1.0:
+            raise ValueError("min_overlap must be in [0, 1].")
+
+    @property
+    def rect(self) -> tuple[int, int, int, int]:
+        return (self.x1, self.y1, self.x2, self.y2)
+
+    @property
+    def area(self) -> int:
+        return (self.x2 - self.x1) * (self.y2 - self.y1)
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Top-level aggregate passed through the CLI."""
 
@@ -282,6 +315,7 @@ class AppConfig:
     detect: DetectConfig = field(default_factory=DetectConfig)
     log: LogConfig = field(default_factory=LogConfig)
     dashboard: DashboardConfig = field(default_factory=DashboardConfig)
+    zones: tuple[Zone, ...] = ()
     prefer_screen: bool = False
     forced_url: str | None = None
     enhance_enabled: bool = False
