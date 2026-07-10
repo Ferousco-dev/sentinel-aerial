@@ -27,8 +27,10 @@ from .config import (
     EnhanceQuality,
     LogConfig,
     SourceKind,
+    TrackConfig,
     Zone,
 )
+from .tracking import Track, Tracker, iou
 from .dedup import CooldownFilter, DedupStats
 from .detect import Detection, Detector, DetectorUnavailable, filter_by_class
 from .scheduler import DetectionScheduler, ScheduleStats
@@ -57,6 +59,10 @@ __all__ = [
     "EnhanceQuality",
     "LogConfig",
     "SourceKind",
+    "TrackConfig",
+    "Tracker",
+    "Track",
+    "iou",
     "Zone",
     "ZoneMonitor",
     "BreachEvent",

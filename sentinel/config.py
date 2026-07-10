@@ -273,6 +273,22 @@ class DashboardConfig:
 
 
 @dataclass(frozen=True)
+class TrackConfig:
+    """Multi-object tracking parameters (M8 #40)."""
+
+    enabled: bool = False
+    iou_threshold: float = 0.3      # min IoU to associate a detection to a track
+    max_age_frames: int = 30        # retire a track after this many missed frames
+    loiter_s: float = 8.0           # dwell time that counts as loitering
+
+    def __post_init__(self) -> None:
+        if not 0.0 < self.iou_threshold <= 1.0:
+            raise ValueError("iou_threshold must be in (0, 1].")
+        if self.max_age_frames < 0:
+            raise ValueError("max_age_frames must be non-negative.")
+
+
+@dataclass(frozen=True)
 class AlertConfig:
     """Configuration for outbound breach alerts (Telegram).
 
@@ -341,6 +357,7 @@ class AppConfig:
     log: LogConfig = field(default_factory=LogConfig)
     dashboard: DashboardConfig = field(default_factory=DashboardConfig)
     alert: AlertConfig = field(default_factory=AlertConfig)
+    track: TrackConfig = field(default_factory=TrackConfig)
     zones: tuple[Zone, ...] = ()
     prefer_screen: bool = False
     forced_url: str | None = None

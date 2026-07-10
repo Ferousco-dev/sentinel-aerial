@@ -62,11 +62,18 @@ class Detection:
     cls_name: str
     confidence: float
     bbox: tuple[int, int, int, int]
+    # Stable per-object id assigned by the tracker (None until tracked).
+    track_id: int | None = None
 
     @property
     def area(self) -> int:
         x1, y1, x2, y2 = self.bbox
         return max(0, x2 - x1) * max(0, y2 - y1)
+
+    def with_track_id(self, track_id: int) -> "Detection":
+        """Return a copy carrying a track id (Detection is frozen)."""
+        return Detection(self.cls_id, self.cls_name, self.confidence,
+                         self.bbox, track_id)
 
     def as_row(self) -> dict:
         """Flat dict for logging / serialization (Phase 4)."""
@@ -191,7 +198,8 @@ class Detector:
             cv2.rectangle(out, (x1, y1), (x2, y2), colour,
                           self._cfg.box_thickness)
 
-            label = f"{det.cls_name} {det.confidence:.0%}"
+            tid = "" if det.track_id is None else f"#{det.track_id} "
+            label = f"{tid}{det.cls_name} {det.confidence:.0%}"
             (tw, th), baseline = cv2.getTextSize(
                 label, cv2.FONT_HERSHEY_SIMPLEX, self._cfg.font_scale, 1)
             # Filled label chip above the box (or inside if it would clip the top).
