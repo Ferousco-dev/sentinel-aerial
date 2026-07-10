@@ -19,6 +19,20 @@ class SourceKind(str, enum.Enum):
     SCREEN = "screen"   # desktop region capture (phone-mirror fallback)
 
 
+class EnhanceQuality(enum.IntEnum):
+    """Enhancement tiers, ordered by cost. The adaptive controller moves along
+    this ladder to hold a latency budget; ``IntEnum`` so tiers compare/step.
+
+    The only difference between tiers is the denoise stage (the expensive part);
+    CLAHE and unsharp are cheap and run at every non-bypass tier.
+    """
+
+    BYPASS = 0   # return the frame untouched (controller emergency floor)
+    LIGHT = 1    # CLAHE + unsharp, no denoise
+    FAST = 2     # cheap bilateral denoise + CLAHE + unsharp
+    FULL = 3     # fastNlMeansDenoisingColored + CLAHE + unsharp (best quality)
+
+
 @dataclass(frozen=True)
 class DiscoveryConfig:
     """Search space and timing for locating a toy-drone video stream.
@@ -111,11 +125,65 @@ class CaptureConfig:
 
 
 @dataclass(frozen=True)
+class EnhanceConfig:
+    """Parameters for the enhancement pipeline (denoise → CLAHE → unsharp).
+
+    Defaults are tuned for a ~640×480 low-quality toy-drone feed on a laptop
+    CPU. The adaptive controller may downgrade ``max_quality`` at runtime to keep
+    per-frame latency under ``target_fps``; it never exceeds ``max_quality``.
+    """
+
+    # -- pipeline toggle & starting/ceiling quality tier --
+    enabled: bool = True
+    max_quality: EnhanceQuality = EnhanceQuality.FULL
+
+    # -- adaptive controller --
+    adaptive: bool = True
+    target_fps: float = 20.0          # latency budget = 1/target_fps per frame
+    latency_ema_alpha: float = 0.3    # smoothing for the latency estimate
+    upgrade_headroom: float = 0.6     # upgrade only if EMA < headroom*budget
+
+    # -- FULL-tier denoise (fastNlMeansDenoisingColored) --
+    nlm_h: float = 7.0                # luminance filter strength
+    nlm_h_color: float = 7.0          # chrominance filter strength
+    nlm_template_window: int = 7      # must be odd
+    nlm_search_window: int = 21       # must be odd; dominates cost
+
+    # -- FAST-tier denoise (bilateral: edge-preserving, far cheaper) --
+    bilateral_diameter: int = 5
+    bilateral_sigma_color: float = 50.0
+    bilateral_sigma_space: float = 50.0
+
+    # -- CLAHE (adaptive local contrast on the L channel of LAB) --
+    clahe_clip_limit: float = 2.0
+    clahe_tile_grid: tuple[int, int] = (8, 8)
+
+    # -- unsharp mask (sharpen = frame + amount*(frame - blur)) --
+    unsharp_amount: float = 0.7
+    unsharp_sigma: float = 1.0
+    unsharp_threshold: int = 0        # only sharpen pixels changing by > threshold
+
+    def __post_init__(self) -> None:
+        # Odd-window invariants that OpenCV requires; fail fast if misconfigured.
+        if self.nlm_template_window % 2 == 0 or self.nlm_search_window % 2 == 0:
+            raise ValueError("NLM window sizes must be odd.")
+        if self.target_fps <= 0:
+            raise ValueError("target_fps must be positive.")
+
+    @property
+    def latency_budget_s(self) -> float:
+        """Per-frame processing budget derived from the target FPS."""
+        return 1.0 / self.target_fps
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Top-level aggregate passed through the CLI."""
 
     discovery: DiscoveryConfig = field(default_factory=DiscoveryConfig)
     capture: CaptureConfig = field(default_factory=CaptureConfig)
+    enhance: EnhanceConfig = field(default_factory=EnhanceConfig)
     prefer_screen: bool = False
     forced_url: str | None = None
+    enhance_enabled: bool = False
     log_level: str = "INFO"

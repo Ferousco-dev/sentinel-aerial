@@ -15,7 +15,14 @@ fallback.
 
 from __future__ import annotations
 
-from .config import CaptureConfig, DiscoveryConfig, SourceKind
+from .config import (
+    CaptureConfig,
+    DiscoveryConfig,
+    EnhanceConfig,
+    EnhanceQuality,
+    SourceKind,
+)
+from .enhance import FrameEnhancer, benchmark, enhance_frame
 from .video import (
     FrameSource,
     ScreenSource,
@@ -27,7 +34,12 @@ from .video import (
 __all__ = [
     "CaptureConfig",
     "DiscoveryConfig",
+    "EnhanceConfig",
+    "EnhanceQuality",
     "SourceKind",
+    "FrameEnhancer",
+    "enhance_frame",
+    "benchmark",
     "FrameSource",
     "ScreenSource",
     "StreamSource",
