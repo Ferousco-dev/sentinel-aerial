@@ -116,6 +116,25 @@ ENHANCE=0 DETECT=0 ./start.sh                       # raw feed only
 Vars: `SOURCE` (`auto`|`screen`), `URL`, `REGION`, `ENHANCE`, `DETECT`, `LOG`,
 `LOG_LEVEL`. Extra args pass straight through: `./start.sh --log-level DEBUG`.
 
+### Live web dashboard
+
+```bash
+DASHBOARD=1 DETECT=1 LOG=1 ./start.sh          # then open http://127.0.0.1:8000
+# or directly:
+python -m sentinel --dashboard --screen --region 0,0,640,480 --detect --log
+```
+
+Serves a FastAPI + WebSocket dashboard: live annotated video, a real-time event
+feed, and per-class counters — no frontend framework, just one HTML page. The
+pipeline runs on a background thread and streams JPEG frames + events to every
+connected browser. Host/port via `--host`/`--port` or `DASHBOARD_HOST`/`DASHBOARD_PORT`.
+
+### Secrets & `.env`
+
+Copy `.env.example` to `.env` (gitignored) and fill in your keys — Telegram bot
+token/chat id, dashboard token, Claude API key. `start.sh` loads `.env`
+automatically. **Never commit `.env`.**
+
 ### Manual launch
 
 ```bash

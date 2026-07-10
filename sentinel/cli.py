@@ -9,9 +9,16 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
-from .config import AppConfig, CaptureConfig, DetectConfig, LogConfig
+from .config import (
+    AppConfig,
+    CaptureConfig,
+    DashboardConfig,
+    DetectConfig,
+    LogConfig,
+)
 from .logging_config import configure, get_logger
 from .preview import run_preview
 from .video import open_source
@@ -84,6 +91,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Detection confidence threshold in [0,1] (default: 0.35).",
     )
     parser.add_argument(
+        "--dashboard", action="store_true",
+        help="Serve the live web dashboard instead of the desktop preview.",
+    )
+    parser.add_argument(
+        "--host", default=None,
+        help="Dashboard bind host (default: 127.0.0.1 or $DASHBOARD_HOST).",
+    )
+    parser.add_argument(
+        "--port", type=int, default=None,
+        help="Dashboard port (default: 8000 or $DASHBOARD_PORT).",
+    )
+    parser.add_argument(
         "--log-level", default="INFO",
         choices=("DEBUG", "INFO", "WARNING", "ERROR"),
         help="Logging verbosity (default: INFO).",
@@ -113,15 +132,22 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
         cooldown_s=LogConfig().cooldown_s if args.cooldown is None
         else args.cooldown,
     )
+    dash_cfg = DashboardConfig(
+        host=args.host or os.environ.get("DASHBOARD_HOST", DashboardConfig().host),
+        port=(args.port if args.port is not None
+              else int(os.environ.get("DASHBOARD_PORT", DashboardConfig().port))),
+    )
     return AppConfig(
         capture=capture,
         detect=detect_cfg,
         log=log_cfg,
+        dashboard=dash_cfg,
         prefer_screen=args.screen,
         forced_url=args.url,
         enhance_enabled=args.enhance,
         detect_enabled=args.detect,
         log_events=args.log_events,
+        dashboard_enabled=args.dashboard,
         log_level=args.log_level,
     )
 
@@ -129,6 +155,17 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
 def main(argv: list[str] | None = None) -> int:
     config = build_config(argv)
     configure(config.log_level)
+
+    # Dashboard mode: the pipeline runs on a background thread inside the server,
+    # so we don't open a source here — serve() owns the whole lifecycle.
+    if config.dashboard_enabled:
+        from .dashboard import serve
+        _log.info("Sentinel dashboard starting…")
+        try:
+            serve(config)
+        except KeyboardInterrupt:
+            _log.info("Interrupted by operator.")
+        return 0
 
     _log.info("Sentinel ingest starting…")
     try:

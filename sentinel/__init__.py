@@ -16,7 +16,9 @@ fallback.
 from __future__ import annotations
 
 from .config import (
+    AppConfig,
     CaptureConfig,
+    DashboardConfig,
     DetectConfig,
     DiscoveryConfig,
     EnhanceConfig,
@@ -38,7 +40,9 @@ from .video import (
 )
 
 __all__ = [
+    "AppConfig",
     "CaptureConfig",
+    "DashboardConfig",
     "DetectConfig",
     "DiscoveryConfig",
     "EnhanceConfig",

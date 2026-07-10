@@ -1,3 +1,8 @@
+# --- Secrets & local config (never publish) ---
+.env
+.env.*
+!.env.example
+
 # --- AI assistant / tooling artifacts (never publish) ---
 .claude/
 .cursor/

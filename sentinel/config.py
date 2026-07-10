@@ -253,6 +253,26 @@ class LogConfig:
 
 
 @dataclass(frozen=True)
+class DashboardConfig:
+    """Configuration for the FastAPI + WebSocket dashboard (Phase 5)."""
+
+    host: str = "127.0.0.1"
+    port: int = 8000
+    # JPEG quality for streamed frames (lower = smaller/faster).
+    jpeg_quality: int = 70
+    # Cap on the recent-event ring buffer held for late-joining clients.
+    max_events: int = 500
+    # WebSocket push cadence (seconds).
+    push_interval_s: float = 0.05
+
+    def __post_init__(self) -> None:
+        if not 1 <= self.port <= 65535:
+            raise ValueError("port must be in 1..65535.")
+        if not 1 <= self.jpeg_quality <= 100:
+            raise ValueError("jpeg_quality must be in 1..100.")
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Top-level aggregate passed through the CLI."""
 
@@ -261,9 +281,11 @@ class AppConfig:
     enhance: EnhanceConfig = field(default_factory=EnhanceConfig)
     detect: DetectConfig = field(default_factory=DetectConfig)
     log: LogConfig = field(default_factory=LogConfig)
+    dashboard: DashboardConfig = field(default_factory=DashboardConfig)
     prefer_screen: bool = False
     forced_url: str | None = None
     enhance_enabled: bool = False
     detect_enabled: bool = False
     log_events: bool = False
+    dashboard_enabled: bool = False
     log_level: str = "INFO"
