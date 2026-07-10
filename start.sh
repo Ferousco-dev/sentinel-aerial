@@ -52,6 +52,7 @@ LOG="${LOG:-1}"
 REGION="${REGION:-}"
 URL="${URL:-}"
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
+DASHBOARD="${DASHBOARD:-0}"
 
 command -v "$PYTHON" >/dev/null 2>&1 || die "'$PYTHON' not found on PATH."
 
@@ -77,6 +78,13 @@ if { [ "$DETECT" = "1" ] || [ "$LOG" = "1" ]; } \
   pip install -q ultralytics
 fi
 
+# Dashboard needs the web stack.
+if [ "$DASHBOARD" = "1" ] \
+   && ! python -c "import fastapi, uvicorn" >/dev/null 2>&1; then
+  log "installing dashboard deps (fastapi, uvicorn, websockets)…"
+  pip install -q fastapi uvicorn websockets
+fi
+
 # --- Build the argument list -----------------------------------------------
 args=()
 case "$SOURCE" in
@@ -92,6 +100,9 @@ esac
 # Ask the installed CLI which flags it actually supports, so the launcher works
 # against any revision (e.g. --log only exists once the logging stage lands).
 supports() { python -m sentinel --help 2>/dev/null | grep -q -- "$1"; }
+
+# Dashboard mode: serve the web UI instead of the desktop preview window.
+[ "$DASHBOARD" = "1" ] && supports --dashboard && args+=(--dashboard)
 
 # --log already implies --detect, so avoid passing both.
 if [ "$LOG" = "1" ]; then
