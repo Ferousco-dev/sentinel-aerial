@@ -17,11 +17,13 @@ from __future__ import annotations
 
 from .config import (
     CaptureConfig,
+    DetectConfig,
     DiscoveryConfig,
     EnhanceConfig,
     EnhanceQuality,
     SourceKind,
 )
+from .detect import Detection, Detector, DetectorUnavailable
 from .enhance import FrameEnhancer, benchmark, enhance_frame
 from .video import (
     FrameSource,
@@ -33,10 +35,14 @@ from .video import (
 
 __all__ = [
     "CaptureConfig",
+    "DetectConfig",
     "DiscoveryConfig",
     "EnhanceConfig",
     "EnhanceQuality",
     "SourceKind",
+    "Detector",
+    "Detection",
+    "DetectorUnavailable",
     "FrameEnhancer",
     "enhance_frame",
     "benchmark",
