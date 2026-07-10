@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sentinel · Live Surveillance</title>
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #131a22; --line: #223040;
+    --text: #e6edf3; --muted: #7d8da0; --accent: #22d3ee; --alert: #ef4444;
+    --ok: #34d399;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .5px; }
+  header .brand { color: var(--accent); font-weight: 700; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .dot.down { background: var(--alert); }
+  .status { color: var(--muted); font-size: 12px; margin-left: auto; }
+  main {
+    display: grid; grid-template-columns: 1fr 340px; gap: 14px; padding: 14px;
+  }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden;
+  }
+  .video { position: relative; display: flex; align-items: center; justify-content: center;
+           min-height: 320px; background: #000; }
+  .video img { width: 100%; height: auto; display: block; }
+  .video .hud {
+    position: absolute; top: 8px; left: 8px; display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .chip {
+    background: rgba(0,0,0,.55); border: 1px solid var(--line); color: var(--text);
+    padding: 3px 8px; border-radius: 999px; font-size: 12px;
+  }
+  .chip b { color: var(--accent); }
+  .side { display: flex; flex-direction: column; gap: 14px; }
+  .counters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px; }
+  .metric { background: #0e141b; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .metric .n { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .metric .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  .feed-head { padding: 10px 14px; border-bottom: 1px solid var(--line);
+               display: flex; align-items: center; justify-content: space-between; }
+  .feed-head h2 { font-size: 13px; margin: 0; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  #feed { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow-y: auto; }
+  #feed li {
+    display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+    border-bottom: 1px solid var(--line); animation: flash .6s ease-out;
+  }
+  @keyframes flash { from { background: rgba(34,211,238,.18); } to { background: transparent; } }
+  .tag { font-weight: 600; padding: 2px 8px; border-radius: 6px; background: #0e141b;
+         border: 1px solid var(--line); font-size: 12px; }
+  .tag.person { color: #f472b6; } .tag.car, .tag.truck, .tag.bus { color: #60a5fa; }
+  .conf { color: var(--muted); font-size: 12px; }
+  .time { color: var(--muted); font-size: 11px; margin-left: auto; }
+  .empty { color: var(--muted); padding: 16px; text-align: center; }
+</style>
+</head>
+<body>
+  <header>
+    <span class="dot" id="dot"></span>
+    <h1><span class="brand">SENTINEL</span> · Live Surveillance</h1>
+    <span class="status" id="status">connecting…</span>
+  </header>
+
+  <main>
+    <section class="panel video">
+      <img id="frame" alt="live feed" />
+      <div class="hud">
+        <span class="chip">FPS <b id="fps">—</b></span>
+        <span class="chip">enhance <b id="enh">—</b></span>
+        <span class="chip">in-frame <b id="inframe">0</b></span>
+      </div>
+    </section>
+
+    <section class="side">
+      <div class="panel">
+        <div class="counters">
+          <div class="metric"><div class="n" id="total">0</div><div class="k">Total events</div></div>
+          <div class="metric"><div class="n" id="rate">0</div><div class="k">Events / min</div></div>
+        </div>
+        <div id="byclass" class="counters" style="padding-top:0"></div>
+      </div>
+
+      <div class="panel">
+        <div class="feed-head"><h2>Event feed</h2><span class="status" id="count">0</span></div>
+        <ul id="feed"><li class="empty">Waiting for detections…</li></ul>
+      </div>
+    </section>
+  </main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const feed = $("feed");
+  let total = 0, emptied = false;
+  const times = [];  // event timestamps for the per-minute rate
+
+  const fmt = (ts) => new Date(ts * 1000).toLocaleTimeString();
+
+  function setStatus(state) {
+    const dot = $("dot");
+    dot.className = "dot " + state;
+    $("status").textContent =
+      state === "live" ? "live" : state === "down" ? "pipeline stopped" : "disconnected";
+  }
+
+  function onFrame(msg) {
+    $("frame").src = "data:image/jpeg;base64," + msg.jpg;
+    const s = msg.stats || {};
+    $("fps").textContent = s.fps ?? "—";
+    $("enh").textContent = s.enhance ?? "—";
+    $("inframe").textContent = s.detections ?? 0;
+    if (s.total_logged != null) $("total").textContent = s.total_logged;
+    if (s.counts_by_class) renderByClass(s.counts_by_class);
+    setStatus(s.fps ? "live" : "down");
+  }
+
+  function renderByClass(counts) {
+    const box = $("byclass");
+    box.innerHTML = "";
+    Object.entries(counts).forEach(([k, v]) => {
+      const el = document.createElement("div");
+      el.className = "metric";
+      el.innerHTML = `<div class="n">${v}</div><div class="k">${k}</div>`;
+      box.appendChild(el);
+    });
+  }
+
+  function onEvent(e) {
+    if (!emptied) { feed.innerHTML = ""; emptied = true; }
+    total++;
+    $("count").textContent = total;
+    times.push(Date.now());
+    while (times.length && Date.now() - times[0] > 60000) times.shift();
+    $("rate").textContent = times.length;
+
+    const li = document.createElement("li");
+    li.innerHTML =
+      `<span class="tag ${e.cls_name}">${e.cls_name}</span>` +
+      `<span class="conf">${Math.round((e.confidence || 0) * 100)}%</span>` +
+      `<span class="time">${fmt(e.ts)}</span>`;
+    feed.prepend(li);
+    while (feed.children.length > 200) feed.removeChild(feed.lastChild);
+  }
+
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onmessage = (m) => {
+      const msg = JSON.parse(m.data);
+      if (msg.type === "frame") onFrame(msg);
+      else if (msg.type === "event") onEvent(msg);
+    };
+    ws.onclose = () => { setStatus("disconnected"); setTimeout(connect, 1000); };
+    ws.onerror = () => ws.close();
+  }
+  connect();
+})();
+</script>
+</body>
+</html>
