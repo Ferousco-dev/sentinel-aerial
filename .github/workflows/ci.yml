@@ -1,0 +1,61 @@
+name: CI
+
+# Enforce quality gates on every PR into main and on pushes to main.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, compile & self-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install core dependencies
+        # Headless OpenCV so cv2 imports without a display on CI runners.
+        run: |
+          python -m pip install --upgrade pip
+          pip install opencv-python-headless numpy mss ruff
+
+      - name: Lint (ruff)
+        run: ruff check sentinel
+
+      - name: Byte-compile all modules
+        run: python -m compileall -q sentinel
+
+      - name: Enhancement benchmark (smoke test)
+        run: python -m sentinel.enhance 320 240
+
+      - name: Package self-test
+        run: |
+          python - <<'PY'
+          import numpy as np
+          from sentinel import EnhanceConfig, EnhanceQuality, FrameEnhancer, enhance_frame
+          rng = np.random.default_rng(0)
+          f = np.clip(np.full((240,320,3),100,np.uint8)+rng.normal(0,15,(240,320,3)),0,255).astype(np.uint8)
+          out = enhance_frame(f)
+          assert out.shape == f.shape and out.dtype == np.uint8
+          enh = FrameEnhancer(EnhanceConfig(target_fps=20, max_quality=EnhanceQuality.FULL))
+          for _ in range(15): enh.process(f)
+          assert enh.quality <= EnhanceQuality.FULL
+          print("self-test OK; settled tier:", enh.quality.name)
+          PY

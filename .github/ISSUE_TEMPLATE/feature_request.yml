@@ -1,0 +1,61 @@
+name: "✨ Feature / Task"
+description: A unit of deliverable work (feature, backend, AI, docs, etc.)
+title: "feat: <concise summary>"
+labels: ["feature"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What are we building and why? Context for a reviewer with no prior knowledge.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checklist that defines "done". Must be objectively verifiable.
+      value: |
+        - [ ]
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - high priority
+        - medium priority
+        - low priority
+    validations:
+      required: true
+  - type: dropdown
+    id: effort
+    attributes:
+      label: Estimated effort
+      description: Rough T-shirt / story points.
+      options:
+        - "XS (< 2h)"
+        - "S (~half day)"
+        - "M (~1-2 days)"
+        - "L (~3-5 days)"
+        - "XL (> 1 week / needs breakdown)"
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Issues that must land first (e.g. "Depends on #3"). Write "None" if independent.
+      value: "None"
+    validations:
+      required: true
+  - type: input
+    id: branch
+    attributes:
+      label: Proposed branch
+      description: e.g. feature/detection, refactor/database-layer
+    validations:
+      required: true
