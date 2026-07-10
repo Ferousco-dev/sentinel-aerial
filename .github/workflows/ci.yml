@@ -30,11 +30,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install core dependencies
+      - name: Install dependencies
         # Headless OpenCV so cv2 imports without a display on CI runners.
+        # The test suite deliberately avoids torch/ultralytics (pure helpers and
+        # fakes stand in for the detector), so CI stays fast and light.
         run: |
           python -m pip install --upgrade pip
-          pip install opencv-python-headless numpy mss ruff
+          pip install opencv-python-headless numpy mss ruff \
+                      fastapi uvicorn websockets httpx requests \
+                      pytest pytest-cov
 
       - name: Lint (ruff)
         run: ruff check sentinel
@@ -59,3 +63,8 @@ jobs:
           assert enh.quality <= EnhanceQuality.FULL
           print("self-test OK; settled tier:", enh.quality.name)
           PY
+
+      - name: Test suite (pytest + coverage gate)
+        run: |
+          python -m pytest tests/ -q \
+            --cov=sentinel --cov-report=term-missing --cov-fail-under=45
