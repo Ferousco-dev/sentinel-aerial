@@ -192,6 +192,12 @@ class DetectConfig:
     # Global confidence floor; detections below this are discarded.
     confidence: float = 0.35
 
+    # Class allowlist: only these COCO classes are kept. Defaults to the classes
+    # that matter for aerial surveillance. Set to None to keep every class.
+    class_allowlist: tuple[str, ...] | None = (
+        "person", "bicycle", "car", "motorcycle", "bus", "truck",
+    )
+
     # Intersection-over-union threshold for non-max suppression.
     iou: float = 0.45
 
