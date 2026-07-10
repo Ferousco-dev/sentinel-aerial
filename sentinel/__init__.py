@@ -15,7 +15,9 @@ fallback.
 
 from __future__ import annotations
 
+from .alerts import TelegramNotifier, resolve_chat_id
 from .config import (
+    AlertConfig,
     AppConfig,
     CaptureConfig,
     DashboardConfig,
@@ -42,7 +44,10 @@ from .video import (
 )
 
 __all__ = [
+    "AlertConfig",
     "AppConfig",
+    "TelegramNotifier",
+    "resolve_chat_id",
     "CaptureConfig",
     "DashboardConfig",
     "DetectConfig",

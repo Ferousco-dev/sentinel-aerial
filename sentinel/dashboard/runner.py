@@ -12,6 +12,7 @@ import time
 
 import cv2
 
+from ..alerts import TelegramNotifier
 from ..config import AppConfig
 from ..dedup import CooldownFilter
 from ..detect import Detector, DetectorUnavailable
@@ -64,6 +65,8 @@ class PipelineRunner:
                  if cfg.log_events and cfg.log.dedup_enabled else None)
         monitor = ZoneMonitor(cfg.zones) if cfg.zones else None
         prev_breached: set[str] = set()
+        notifier = (TelegramNotifier.from_env(cfg.alert)
+                    if cfg.zones and cfg.alert.enabled else None)
 
         try:
             source = open_source(
@@ -112,8 +115,10 @@ class PipelineRunner:
                         frame = draw_zones(frame, cfg.zones, breached)
                         newly = breached - prev_breached
                         if newly:
-                            self._publish_breaches(
-                                [b for b in breaches if b.zone_name in newly])
+                            fresh = [b for b in breaches
+                                     if b.zone_name in newly]
+                            self._publish_breaches(fresh)
+                            self._send_alerts(notifier, frame, fresh)
                         prev_breached = breached
 
                     frames += 1
@@ -131,6 +136,8 @@ class PipelineRunner:
         finally:
             if event_log is not None:
                 event_log.close()
+            if notifier is not None:
+                notifier.close()
             self._state.set_running(False)
 
     def _publish_events(self, detections) -> None:
@@ -140,6 +147,18 @@ class PipelineRunner:
              "confidence": round(d.confidence, 3), "bbox": list(d.bbox)}
             for d in detections
         ])
+
+    def _send_alerts(self, notifier, frame, breaches) -> None:
+        """Fire a Telegram snapshot for each newly-breached zone."""
+        if notifier is None:
+            return
+        for b in breaches:
+            caption = (f"🚨 SENTINEL breach\n"
+                       f"{b.cls_name} in '{b.zone_name}' "
+                       f"({b.overlap * 100:.0f}% overlap)\n"
+                       f"{time.strftime('%Y-%m-%d %H:%M:%S')}")
+            if notifier.notify_breach(frame, b.zone_name, caption):
+                _log.info("Telegram alert queued for zone '%s'.", b.zone_name)
 
     def _publish_breaches(self, breaches) -> None:
         for b in breaches:

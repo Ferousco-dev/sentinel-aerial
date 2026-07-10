@@ -13,6 +13,7 @@ import os
 import sys
 
 from .config import (
+    AlertConfig,
     AppConfig,
     CaptureConfig,
     DashboardConfig,
@@ -115,6 +116,14 @@ def _build_parser() -> argparse.ArgumentParser:
              "e.g. --zone 100,80,400,360:north",
     )
     parser.add_argument(
+        "--no-telegram", action="store_true",
+        help="Disable Telegram breach alerts even if credentials are set.",
+    )
+    parser.add_argument(
+        "--telegram-cooldown", type=float, default=None, metavar="SECONDS",
+        help="Per-zone minimum seconds between Telegram alerts (default: 30).",
+    )
+    parser.add_argument(
         "--dashboard", action="store_true",
         help="Serve the live web dashboard instead of the desktop preview.",
     )
@@ -156,6 +165,11 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
         cooldown_s=LogConfig().cooldown_s if args.cooldown is None
         else args.cooldown,
     )
+    alert_cfg = AlertConfig(
+        enabled=not args.no_telegram,
+        cooldown_s=(AlertConfig().cooldown_s if args.telegram_cooldown is None
+                    else args.telegram_cooldown),
+    )
     dash_cfg = DashboardConfig(
         host=args.host or os.environ.get("DASHBOARD_HOST", DashboardConfig().host),
         port=(args.port if args.port is not None
@@ -166,6 +180,7 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
         detect=detect_cfg,
         log=log_cfg,
         dashboard=dash_cfg,
+        alert=alert_cfg,
         zones=tuple(args.zone or ()),
         prefer_screen=args.screen,
         forced_url=args.url,
@@ -210,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
             config.enhance, config.enhance_enabled,
             config.detect, config.detect_enabled,
             config.log, config.log_events,
-            zones=config.zones)
+            zones=config.zones, alert_config=config.alert)
     except KeyboardInterrupt:
         _log.info("Interrupted by operator.")
         source.release()

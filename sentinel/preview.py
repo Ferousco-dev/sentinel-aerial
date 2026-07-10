@@ -18,7 +18,14 @@ from datetime import datetime
 import cv2
 import numpy as np
 
-from .config import CaptureConfig, DetectConfig, EnhanceConfig, LogConfig
+from .alerts import TelegramNotifier
+from .config import (
+    AlertConfig,
+    CaptureConfig,
+    DetectConfig,
+    EnhanceConfig,
+    LogConfig,
+)
 from .dedup import CooldownFilter
 from .detect import Detector, DetectorUnavailable
 from .scheduler import DetectionScheduler
@@ -58,6 +65,7 @@ def run_preview(
     log_config: LogConfig | None = None,
     log_enabled: bool = False,
     zones: tuple = (),
+    alert_config: AlertConfig | None = None,
 ) -> None:
     """Blocking preview loop. Returns when the operator presses ``q``.
 
@@ -83,6 +91,9 @@ def run_preview(
              if log_enabled and log_cfg.dedup_enabled else None)
     monitor = ZoneMonitor(zones) if zones else None
     prev_breached: set[str] = set()
+    alert_cfg = alert_config or AlertConfig()
+    notifier = (TelegramNotifier.from_env(alert_cfg)
+                if zones and alert_cfg.enabled else None)
     do_enhance = enhance_enabled
     do_detect = detect_enabled or log_enabled
     do_compare = False
@@ -139,6 +150,13 @@ def run_preview(
                             _log.warning(
                                 "ZONE BREACH: %s in '%s' (%.0f%% overlap)",
                                 b.cls_name, b.zone_name, b.overlap * 100)
+                            if notifier is not None:
+                                cap = (f"🚨 SENTINEL breach\n{b.cls_name} in "
+                                       f"'{b.zone_name}' "
+                                       f"({b.overlap * 100:.0f}% overlap)\n"
+                                       f"{datetime.now():%Y-%m-%d %H:%M:%S}")
+                                notifier.notify_breach(processed, b.zone_name,
+                                                       cap)
                     prev_breached = breached
 
                 rate = fps.tick()
@@ -180,6 +198,8 @@ def run_preview(
                           "(cooldown %.1fs).",
                           s.seen, s.logged, s.suppressed, log_cfg.cooldown_s)
             event_log.close()
+        if notifier is not None:
+            notifier.close()
         cv2.destroyAllWindows()
         _log.info("Preview stopped.")
 
