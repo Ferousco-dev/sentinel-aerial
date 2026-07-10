@@ -18,14 +18,15 @@ from datetime import datetime
 import cv2
 import numpy as np
 
-from .config import CaptureConfig, EnhanceConfig
+from .config import CaptureConfig, DetectConfig, EnhanceConfig
+from .detect import Detector, DetectorUnavailable
 from .enhance import FrameEnhancer
 from .logging_config import get_logger
 from .video import FrameSource
 
 _log = get_logger("sentinel.preview")
 
-_WINDOW = "Sentinel · feed  [q]uit [s]nap [e]nhance [c]ompare"
+_WINDOW = "Sentinel · feed  [q]uit [s]nap [e]nhance [d]etect [c]ompare"
 
 
 class _FpsMeter:
@@ -48,22 +49,32 @@ def run_preview(
     capture_config: CaptureConfig,
     enhance_config: EnhanceConfig | None = None,
     enhance_enabled: bool = False,
+    detect_config: DetectConfig | None = None,
+    detect_enabled: bool = False,
 ) -> None:
     """Blocking preview loop. Returns when the operator presses ``q``.
 
+    Pipeline per frame: capture → (enhance) → (detect+annotate) → display.
+
     Keys: ``q`` quit · ``s`` snapshot · ``e`` toggle enhancement ·
-    ``c`` toggle raw/enhanced split view.
+    ``d`` toggle detection · ``c`` toggle raw/enhanced split view.
     """
     os.makedirs(capture_config.snapshot_dir, exist_ok=True)
     cv2.namedWindow(_WINDOW, cv2.WINDOW_NORMAL)
     fps = _FpsMeter()
 
     enhancer = FrameEnhancer(enhance_config or EnhanceConfig())
+    # Detector is constructed lazily on first enable so torch/weights are only
+    # loaded when detection is actually requested.
+    detector: Detector | None = None
+    detect_cfg = detect_config or DetectConfig()
     do_enhance = enhance_enabled
+    do_detect = detect_enabled
     do_compare = False
+    last_count = 0
 
     _log.info("Preview started · source=%s", source.descriptor)
-    _log.info("Keys: q=quit, s=snapshot, e=enhance, c=compare")
+    _log.info("Keys: q=quit, s=snapshot, e=enhance, d=detect, c=compare")
 
     with source:
         while True:
@@ -74,6 +85,18 @@ def run_preview(
                 continue
 
             processed = enhancer.process(raw) if do_enhance else raw
+
+            detections = []
+            if do_detect:
+                if detector is None:
+                    detector = Detector(detect_cfg)
+                try:
+                    processed, detections = detector.process(processed)
+                except DetectorUnavailable as exc:
+                    _log.error("%s", exc)
+                    do_detect = False  # disable so we don't spam the log
+                last_count = len(detections)
+
             rate = fps.tick()
 
             if do_compare and do_enhance:
@@ -82,7 +105,7 @@ def run_preview(
                 display = processed.copy()
 
             _draw_hud(display, source.kind.value, rate, raw.shape,
-                      do_enhance, enhancer, do_compare)
+                      do_enhance, enhancer, do_compare, do_detect, last_count)
 
             cv2.imshow(_WINDOW, display)
             key = cv2.waitKey(1) & 0xFF
@@ -93,6 +116,9 @@ def run_preview(
             elif key == ord("e"):
                 do_enhance = not do_enhance
                 _log.info("Enhancement %s", "ON" if do_enhance else "OFF")
+            elif key == ord("d"):
+                do_detect = not do_detect
+                _log.info("Detection %s", "ON" if do_detect else "OFF")
             elif key == ord("c"):
                 do_compare = not do_compare
                 _log.info("Compare view %s", "ON" if do_compare else "OFF")
@@ -113,8 +139,9 @@ def _side_by_side(raw, processed):
     return combo
 
 
-def _draw_hud(canvas, kind, rate, raw_shape, do_enhance, enhancer, do_compare):
-    """Telemetry bar: source, FPS, resolution, and enhancement state."""
+def _draw_hud(canvas, kind, rate, raw_shape, do_enhance, enhancer, do_compare,
+              do_detect=False, det_count=0):
+    """Telemetry bar: source, FPS, resolution, enhancement & detection state."""
     h, w = raw_shape[:2]
     label = f"{kind}  {rate:4.1f} FPS  {w}x{h}"
     if do_enhance:
@@ -122,6 +149,7 @@ def _draw_hud(canvas, kind, rate, raw_shape, do_enhance, enhancer, do_compare):
                   f"  {enhancer.stats.last_latency_ms:4.1f}ms")
     else:
         label += "  |  enhance:OFF"
+    label += f"  |  detect:{det_count}" if do_detect else "  |  detect:OFF"
     cv2.rectangle(canvas, (0, 0), (canvas.shape[1], 34), (0, 0, 0), -1)
     cv2.putText(canvas, label, (10, 24), cv2.FONT_HERSHEY_SIMPLEX,
                 0.7, (0, 255, 0), 2, cv2.LINE_AA)
