@@ -85,6 +85,7 @@ class PipelineRunner:
                     frame = enhancer.process(raw) if cfg.enhance_enabled else raw
 
                     detections, ran = [], False
+                    breached: set[str] = set()
                     if detect_ok:
                         if scheduler is None:
                             scheduler = DetectionScheduler(
@@ -125,7 +126,8 @@ class PipelineRunner:
                     if ok_enc:
                         self._state.publish_frame(
                             buf.tobytes(),
-                            self._stats(fps, len(detections), enhancer, event_log))
+                            self._stats(fps, len(detections), enhancer,
+                                        event_log, breached))
         finally:
             if event_log is not None:
                 event_log.close()
@@ -150,12 +152,15 @@ class PipelineRunner:
             for b in breaches
         ])
 
-    def _stats(self, fps, det_count, enhancer, event_log) -> dict:
+    def _stats(self, fps, det_count, enhancer, event_log, breached) -> dict:
         stats = {
             "fps": round(fps, 1),
             "detections": det_count,
             "enhance": (enhancer.stats.quality
                         if self._cfg.enhance_enabled else "off"),
+            # Zones currently breached — drives the dashboard alert banner and
+            # lets it clear the instant the breach ends.
+            "breaches": sorted(breached),
         }
         if event_log is not None:
             summ = event_log.summary()

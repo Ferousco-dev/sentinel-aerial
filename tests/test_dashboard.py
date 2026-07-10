@@ -68,6 +68,29 @@ def test_websocket_streams_frame_and_event():
     assert got_frame and got_event
 
 
+def test_websocket_breach_event_and_alert_stats():
+    state = LiveState()
+    # Frame stats carry the active breach list; the UI uses it to show/clear.
+    state.publish_frame(b"\xff\xd8\xff", {"fps": 15, "breaches": ["north"]})
+    state.publish_events([
+        {"kind": "breach", "zone": "north", "cls_name": "person",
+         "confidence": 0.9, "ts": 1.0, "bbox": [1, 2, 3, 4]},
+    ])
+    client = _client(state)
+    with client.websocket_connect("/ws") as ws:
+        breach_evt = frame_breaches = None
+        for _ in range(10):
+            msg = ws.receive_json()
+            if msg["type"] == "event" and msg.get("kind") == "breach":
+                breach_evt = msg
+            elif msg["type"] == "frame":
+                frame_breaches = msg["stats"].get("breaches")
+            if breach_evt and frame_breaches is not None:
+                break
+    assert breach_evt["zone"] == "north"
+    assert frame_breaches == ["north"]
+
+
 def test_dashboard_config_validation():
     import pytest
     with pytest.raises(ValueError):

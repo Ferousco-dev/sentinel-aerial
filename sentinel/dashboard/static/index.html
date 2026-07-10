@@ -64,6 +64,22 @@
   .conf { color: var(--muted); font-size: 12px; }
   .time { color: var(--muted); font-size: 11px; margin-left: auto; }
   .empty { color: var(--muted); padding: 16px; text-align: center; }
+
+  /* Zone-breach alert */
+  .banner {
+    display: none; align-items: center; gap: 10px;
+    background: var(--alert); color: #fff; font-weight: 700;
+    padding: 11px 18px; letter-spacing: .3px;
+    animation: bannerpulse 1s ease-in-out infinite;
+  }
+  .banner.show { display: flex; }
+  .banner .x { margin-left: auto; font-weight: 600; opacity: .9; font-size: 12px; }
+  @keyframes bannerpulse { 50% { filter: brightness(1.25); } }
+  .video.alerting { box-shadow: inset 0 0 0 4px var(--alert); animation: ring 1s ease-in-out infinite; }
+  @keyframes ring { 50% { box-shadow: inset 0 0 0 9px var(--alert); } }
+  #feed li.breach { background: rgba(239,68,68,.14); }
+  #feed li.breach .tag { color: #fff; background: var(--alert); border-color: var(--alert); }
+  .zone { color: var(--alert); font-weight: 700; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -73,8 +89,13 @@
     <span class="status" id="status">connecting…</span>
   </header>
 
+  <div class="banner" id="banner">
+    ⚠ ZONE BREACH <span id="banner-zones"></span>
+    <span class="x">restricted area entered</span>
+  </div>
+
   <main>
-    <section class="panel video">
+    <section class="panel video" id="video">
       <img id="frame" alt="live feed" />
       <div class="hud">
         <span class="chip">FPS <b id="fps">—</b></span>
@@ -123,7 +144,16 @@
     $("inframe").textContent = s.detections ?? 0;
     if (s.total_logged != null) $("total").textContent = s.total_logged;
     if (s.counts_by_class) renderByClass(s.counts_by_class);
+    setAlert(s.breaches);           // live alert state, clears when empty
     setStatus(s.fps ? "live" : "down");
+  }
+
+  // Show/hide the breach banner + video ring from the live breach list.
+  function setAlert(zones) {
+    const on = Array.isArray(zones) && zones.length > 0;
+    $("banner").classList.toggle("show", on);
+    $("video").classList.toggle("alerting", on);
+    $("banner-zones").textContent = on ? "· " + zones.join(", ") : "";
   }
 
   function renderByClass(counts) {
@@ -146,10 +176,19 @@
     $("rate").textContent = times.length;
 
     const li = document.createElement("li");
-    li.innerHTML =
-      `<span class="tag ${e.cls_name}">${e.cls_name}</span>` +
-      `<span class="conf">${Math.round((e.confidence || 0) * 100)}%</span>` +
-      `<span class="time">${fmt(e.ts)}</span>`;
+    if (e.kind === "breach") {
+      li.className = "breach";
+      li.innerHTML =
+        `<span class="tag ${e.cls_name}">${e.cls_name}</span>` +
+        `<span class="zone">⚠ ${e.zone}</span>` +
+        `<span class="conf">${Math.round((e.confidence || 0) * 100)}%</span>` +
+        `<span class="time">${fmt(e.ts)}</span>`;
+    } else {
+      li.innerHTML =
+        `<span class="tag ${e.cls_name}">${e.cls_name}</span>` +
+        `<span class="conf">${Math.round((e.confidence || 0) * 100)}%</span>` +
+        `<span class="time">${fmt(e.ts)}</span>`;
+    }
     feed.prepend(li);
     while (feed.children.length > 200) feed.removeChild(feed.lastChild);
   }
