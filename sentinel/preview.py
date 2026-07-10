@@ -18,9 +18,10 @@ from datetime import datetime
 import cv2
 import numpy as np
 
-from .config import CaptureConfig, DetectConfig, EnhanceConfig
+from .config import CaptureConfig, DetectConfig, EnhanceConfig, LogConfig
 from .detect import Detector, DetectorUnavailable
 from .enhance import FrameEnhancer
+from .eventlog import EventLog
 from .logging_config import get_logger
 from .video import FrameSource
 
@@ -51,10 +52,12 @@ def run_preview(
     enhance_enabled: bool = False,
     detect_config: DetectConfig | None = None,
     detect_enabled: bool = False,
+    log_config: LogConfig | None = None,
+    log_enabled: bool = False,
 ) -> None:
     """Blocking preview loop. Returns when the operator presses ``q``.
 
-    Pipeline per frame: capture → (enhance) → (detect+annotate) → display.
+    Pipeline per frame: capture → (enhance) → (detect+annotate) → (log) → display.
 
     Keys: ``q`` quit · ``s`` snapshot · ``e`` toggle enhancement ·
     ``d`` toggle detection · ``c`` toggle raw/enhanced split view.
@@ -68,63 +71,79 @@ def run_preview(
     # loaded when detection is actually requested.
     detector: Detector | None = None
     detect_cfg = detect_config or DetectConfig()
+    # Event log opens only when requested; logging implies detection.
+    event_log = EventLog(log_config or LogConfig()) if log_enabled else None
     do_enhance = enhance_enabled
-    do_detect = detect_enabled
+    do_detect = detect_enabled or log_enabled
     do_compare = False
     last_count = 0
 
     _log.info("Preview started · source=%s", source.descriptor)
     _log.info("Keys: q=quit, s=snapshot, e=enhance, d=detect, c=compare")
+    if event_log is not None:
+        _log.info("Logging detections to %s (session %s)",
+                  (log_config or LogConfig()).db_path, event_log.session_id)
 
-    with source:
-        while True:
-            ok, raw = source.read()
-            if not ok or raw is None:
-                _log.warning("No frame; pausing before retry.")
-                time.sleep(capture_config.read_retry_pause_s)
-                continue
+    try:
+        with source:
+            while True:
+                ok, raw = source.read()
+                if not ok or raw is None:
+                    _log.warning("No frame; pausing before retry.")
+                    time.sleep(capture_config.read_retry_pause_s)
+                    continue
 
-            processed = enhancer.process(raw) if do_enhance else raw
+                processed = enhancer.process(raw) if do_enhance else raw
 
-            detections = []
-            if do_detect:
-                if detector is None:
-                    detector = Detector(detect_cfg)
-                try:
-                    processed, detections = detector.process(processed)
-                except DetectorUnavailable as exc:
-                    _log.error("%s", exc)
-                    do_detect = False  # disable so we don't spam the log
-                last_count = len(detections)
+                detections = []
+                if do_detect:
+                    if detector is None:
+                        detector = Detector(detect_cfg)
+                    try:
+                        processed, detections = detector.process(processed)
+                    except DetectorUnavailable as exc:
+                        _log.error("%s", exc)
+                        do_detect = False  # disable so we don't spam the log
+                    last_count = len(detections)
+                    if event_log is not None and detections:
+                        event_log.write_many(detections)
 
-            rate = fps.tick()
+                rate = fps.tick()
 
-            if do_compare and do_enhance:
-                display = _side_by_side(raw, processed)
-            else:
-                display = processed.copy()
+                if do_compare and do_enhance:
+                    display = _side_by_side(raw, processed)
+                else:
+                    display = processed.copy()
 
-            _draw_hud(display, source.kind.value, rate, raw.shape,
-                      do_enhance, enhancer, do_compare, do_detect, last_count)
+                _draw_hud(display, source.kind.value, rate, raw.shape,
+                          do_enhance, enhancer, do_compare, do_detect,
+                          last_count)
 
-            cv2.imshow(_WINDOW, display)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                break
-            if key == ord("s"):
-                _save_snapshot(processed, capture_config.snapshot_dir)
-            elif key == ord("e"):
-                do_enhance = not do_enhance
-                _log.info("Enhancement %s", "ON" if do_enhance else "OFF")
-            elif key == ord("d"):
-                do_detect = not do_detect
-                _log.info("Detection %s", "ON" if do_detect else "OFF")
-            elif key == ord("c"):
-                do_compare = not do_compare
-                _log.info("Compare view %s", "ON" if do_compare else "OFF")
-
-    cv2.destroyAllWindows()
-    _log.info("Preview stopped.")
+                cv2.imshow(_WINDOW, display)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
+                    break
+                if key == ord("s"):
+                    _save_snapshot(processed, capture_config.snapshot_dir)
+                elif key == ord("e"):
+                    do_enhance = not do_enhance
+                    _log.info("Enhancement %s", "ON" if do_enhance else "OFF")
+                elif key == ord("d"):
+                    do_detect = not do_detect
+                    _log.info("Detection %s", "ON" if do_detect else "OFF")
+                elif key == ord("c"):
+                    do_compare = not do_compare
+                    _log.info("Compare view %s",
+                              "ON" if do_compare else "OFF")
+    finally:
+        if event_log is not None:
+            summary = event_log.summary()
+            _log.info("Session %s logged %d detections across %d class(es).",
+                      summary.session_id, summary.total,
+                      len(summary.counts_by_class))
+            event_log.close()
+        cv2.destroyAllWindows()
+        _log.info("Preview stopped.")
 
 
 def _side_by_side(raw, processed):

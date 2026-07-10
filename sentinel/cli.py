@@ -58,6 +58,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Start with the Phase 3 YOLOv8n detection stage enabled.",
     )
     parser.add_argument(
+        "--log", action="store_true", dest="log_events",
+        help="Log detections to SQLite (implies --detect).",
+    )
+    parser.add_argument(
         "--log-level", default="INFO",
         choices=("DEBUG", "INFO", "WARNING", "ERROR"),
         help="Logging verbosity (default: INFO).",
@@ -75,6 +79,7 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
         forced_url=args.url,
         enhance_enabled=args.enhance,
         detect_enabled=args.detect,
+        log_events=args.log_events,
         log_level=args.log_level,
     )
 
@@ -99,7 +104,8 @@ def main(argv: list[str] | None = None) -> int:
         run_preview(
             source, config.capture,
             config.enhance, config.enhance_enabled,
-            config.detect, config.detect_enabled)
+            config.detect, config.detect_enabled,
+            config.log, config.log_events)
     except KeyboardInterrupt:
         _log.info("Interrupted by operator.")
         source.release()
