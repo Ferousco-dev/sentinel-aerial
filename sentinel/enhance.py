@@ -187,9 +187,9 @@ class FrameEnhancer:
         # CLAHE on L of LAB lifts detail out of shadow without blowing highlights
         # or shifting colour (unlike equalizing RGB channels independently).
         lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        l = self._clahe.apply(l)
-        return cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
+        lightness, a, b = cv2.split(lab)
+        lightness = self._clahe.apply(lightness)
+        return cv2.cvtColor(cv2.merge((lightness, a, b)), cv2.COLOR_LAB2BGR)
 
     def _sharpen(self, frame: Frame) -> Frame:
         blurred = cv2.GaussianBlur(

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from dataclasses import replace
 
 from .config import AppConfig, CaptureConfig
 from .logging_config import configure, get_logger
