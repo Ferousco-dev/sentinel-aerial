@@ -34,6 +34,7 @@ from .detect import Detection, Detector, DetectorUnavailable, filter_by_class
 from .scheduler import DetectionScheduler, ScheduleStats
 from .enhance import FrameEnhancer, benchmark, enhance_frame
 from .eventlog import EventLog, SessionSummary
+from .report import SessionInfo, generate as generate_report, list_sessions
 from .zones import BreachEvent, ZoneMonitor, draw_zones
 from .video import (
     FrameSource,
@@ -70,6 +71,9 @@ __all__ = [
     "ScheduleStats",
     "EventLog",
     "SessionSummary",
+    "SessionInfo",
+    "generate_report",
+    "list_sessions",
     "FrameEnhancer",
     "enhance_frame",
     "benchmark",
