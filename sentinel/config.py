@@ -205,11 +205,24 @@ class DetectConfig:
     box_thickness: int = 2
     font_scale: float = 0.5
 
+    # -- inference throttling (T3) --
+    # Run detection at most once per ``infer_min_interval_s`` seconds; skipped
+    # frames reuse the last result for drawing. A mild default keeps the display
+    # smooth on a laptop CPU (inference is ~100-300 ms/frame) while detections
+    # still update several times a second. Set to 0 to detect on every frame.
+    infer_min_interval_s: float = 0.15
+    # Alternative frame-based gate, used only when the time interval is 0.
+    infer_every_n: int = 1
+
     def __post_init__(self) -> None:
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("confidence must be in [0, 1].")
         if not 0.0 <= self.iou <= 1.0:
             raise ValueError("iou must be in [0, 1].")
+        if self.infer_min_interval_s < 0:
+            raise ValueError("infer_min_interval_s must be non-negative.")
+        if self.infer_every_n < 1:
+            raise ValueError("infer_every_n must be >= 1.")
 
 
 @dataclass(frozen=True)
