@@ -20,6 +20,7 @@ from ..enhance import FrameEnhancer
 from ..eventlog import EventLog
 from ..logging_config import get_logger
 from ..scheduler import DetectionScheduler
+from ..tracking import Tracker
 from ..video import open_source
 from ..zones import ZoneMonitor, draw_zones
 from .state import LiveState
@@ -59,7 +60,7 @@ class PipelineRunner:
         cfg = self._cfg
         enhancer = FrameEnhancer(cfg.enhance)
         scheduler: DetectionScheduler | None = None
-        detect_ok = cfg.detect_enabled or cfg.log_events
+        detect_ok = cfg.detect_enabled or cfg.log_events or cfg.track.enabled
         event_log = EventLog(cfg.log) if cfg.log_events else None
         dedup = (CooldownFilter(cfg.log.cooldown_s)
                  if cfg.log_events and cfg.log.dedup_enabled else None)
@@ -67,6 +68,9 @@ class PipelineRunner:
         prev_breached: set[str] = set()
         notifier = (TelegramNotifier.from_env(cfg.alert)
                     if cfg.zones and cfg.alert.enabled else None)
+        tracker = (Tracker(iou_threshold=cfg.track.iou_threshold,
+                           max_age_frames=cfg.track.max_age_frames)
+                   if cfg.track.enabled else None)
 
         try:
             source = open_source(
@@ -94,7 +98,8 @@ class PipelineRunner:
                             scheduler = DetectionScheduler(
                                 Detector(cfg.detect),
                                 min_interval_s=cfg.detect.infer_min_interval_s,
-                                every_n=cfg.detect.infer_every_n)
+                                every_n=cfg.detect.infer_every_n,
+                                tracker=tracker)
                         try:
                             frame, detections, ran = scheduler.process(frame)
                         except DetectorUnavailable as exc:
@@ -106,6 +111,10 @@ class PipelineRunner:
                             if to_log:
                                 event_log.write_many(to_log)
                                 self._publish_events(to_log)
+                        # Loitering alerts (one per track that overstays).
+                        if tracker is not None and ran:
+                            for tr in tracker.loitering(cfg.track.loiter_s):
+                                self._publish_loiter(tr)
 
                     # Zone-breach evaluation + overlay (every frame, so the red
                     # alert persists while a breach is active).
@@ -132,7 +141,7 @@ class PipelineRunner:
                         self._state.publish_frame(
                             buf.tobytes(),
                             self._stats(fps, len(detections), enhancer,
-                                        event_log, breached))
+                                        event_log, breached, tracker))
         finally:
             if event_log is not None:
                 event_log.close()
@@ -147,6 +156,14 @@ class PipelineRunner:
              "confidence": round(d.confidence, 3), "bbox": list(d.bbox)}
             for d in detections
         ])
+
+    def _publish_loiter(self, track) -> None:
+        _log.warning("LOITERING: %s #%d dwelling %.0fs",
+                     track.cls_name, track.track_id, track.dwell_s)
+        self._state.publish_events([{
+            "kind": "loiter", "ts": track.last_ts, "cls_name": track.cls_name,
+            "track_id": track.track_id, "dwell_s": round(track.dwell_s, 1),
+        }])
 
     def _send_alerts(self, notifier, frame, breaches) -> None:
         """Fire a Telegram snapshot for each newly-breached zone."""
@@ -171,7 +188,8 @@ class PipelineRunner:
             for b in breaches
         ])
 
-    def _stats(self, fps, det_count, enhancer, event_log, breached) -> dict:
+    def _stats(self, fps, det_count, enhancer, event_log, breached,
+               tracker=None) -> dict:
         stats = {
             "fps": round(fps, 1),
             "detections": det_count,
@@ -185,4 +203,8 @@ class PipelineRunner:
             summ = event_log.summary()
             stats["total_logged"] = summ.total
             stats["counts_by_class"] = summ.counts_by_class
+        if tracker is not None:
+            # Unique object counts (distinct track ids), not per-frame detections.
+            stats["unique"] = tracker.unique_count()
+            stats["unique_by_class"] = tracker.unique_by_class()
         return stats

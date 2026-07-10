@@ -25,10 +25,12 @@ from .config import (
     DetectConfig,
     EnhanceConfig,
     LogConfig,
+    TrackConfig,
 )
 from .dedup import CooldownFilter
 from .detect import Detector, DetectorUnavailable
 from .scheduler import DetectionScheduler
+from .tracking import Tracker
 from .zones import ZoneMonitor, draw_zones
 from .enhance import FrameEnhancer
 from .eventlog import EventLog
@@ -66,6 +68,7 @@ def run_preview(
     log_enabled: bool = False,
     zones: tuple = (),
     alert_config: AlertConfig | None = None,
+    track_config: TrackConfig | None = None,
 ) -> None:
     """Blocking preview loop. Returns when the operator presses ``q``.
 
@@ -94,8 +97,12 @@ def run_preview(
     alert_cfg = alert_config or AlertConfig()
     notifier = (TelegramNotifier.from_env(alert_cfg)
                 if zones and alert_cfg.enabled else None)
+    track_cfg = track_config or TrackConfig()
+    tracker = (Tracker(iou_threshold=track_cfg.iou_threshold,
+                       max_age_frames=track_cfg.max_age_frames)
+               if track_cfg.enabled else None)
     do_enhance = enhance_enabled
-    do_detect = detect_enabled or log_enabled
+    do_detect = detect_enabled or log_enabled or track_cfg.enabled
     do_compare = False
     last_count = 0
 
@@ -122,7 +129,8 @@ def run_preview(
                         scheduler = DetectionScheduler(
                             Detector(detect_cfg),
                             min_interval_s=detect_cfg.infer_min_interval_s,
-                            every_n=detect_cfg.infer_every_n)
+                            every_n=detect_cfg.infer_every_n,
+                            tracker=tracker)
                     try:
                         processed, detections, ran = scheduler.process(processed)
                     except DetectorUnavailable as exc:
@@ -130,6 +138,10 @@ def run_preview(
                         do_detect = False  # disable so we don't spam the log
                         ran = False
                     last_count = len(detections)
+                    if tracker is not None and ran:
+                        for tr in tracker.loitering(track_cfg.loiter_s):
+                            _log.warning("LOITERING: %s #%d dwelling %.0fs",
+                                         tr.cls_name, tr.track_id, tr.dwell_s)
                     # Only log on frames where inference actually ran — reused
                     # detections are the same objects, not new sightings.
                     if event_log is not None and ran and detections:

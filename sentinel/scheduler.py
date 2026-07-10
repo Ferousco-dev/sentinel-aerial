@@ -52,7 +52,8 @@ class DetectionScheduler:
 
     def __init__(self, detector: Detector,
                  min_interval_s: float = 0.15,
-                 every_n: int = 1) -> None:
+                 every_n: int = 1,
+                 tracker=None) -> None:
         if min_interval_s < 0:
             raise ValueError("min_interval_s must be non-negative.")
         if every_n < 1:
@@ -60,6 +61,9 @@ class DetectionScheduler:
         self._detector = detector
         self._min_interval_s = min_interval_s
         self._every_n = every_n
+        # Optional multi-object tracker; runs between detect and annotate so
+        # cached (tagged) detections carry stable ids on reused frames too.
+        self._tracker = tracker
         self._last_run: float | None = None
         self._frame_idx = 0
         self._cached: list[Detection] = []
@@ -86,7 +90,10 @@ class DetectionScheduler:
 
         ran = self._is_due(stamp)
         if ran:
-            self._cached = self._detector.detect(frame)
+            detections = self._detector.detect(frame)
+            if self._tracker is not None:
+                detections = self._tracker.update(detections, stamp)
+            self._cached = detections
             self._last_run = stamp
             self.stats.inferences += 1
         else:

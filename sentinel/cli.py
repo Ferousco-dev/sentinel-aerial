@@ -19,6 +19,7 @@ from .config import (
     DashboardConfig,
     DetectConfig,
     LogConfig,
+    TrackConfig,
     Zone,
 )
 from .logging_config import configure, get_logger
@@ -116,6 +117,15 @@ def _build_parser() -> argparse.ArgumentParser:
              "e.g. --zone 100,80,400,360:north",
     )
     parser.add_argument(
+        "--track", action="store_true",
+        help="Enable multi-object tracking (stable ids, unique counts, "
+             "loitering). Implies --detect.",
+    )
+    parser.add_argument(
+        "--loiter", type=float, default=None, metavar="SECONDS",
+        help="Dwell time that counts as loitering (default: 8).",
+    )
+    parser.add_argument(
         "--no-telegram", action="store_true",
         help="Disable Telegram breach alerts even if credentials are set.",
     )
@@ -170,6 +180,11 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
         cooldown_s=(AlertConfig().cooldown_s if args.telegram_cooldown is None
                     else args.telegram_cooldown),
     )
+    track_cfg = TrackConfig(
+        enabled=args.track,
+        loiter_s=(TrackConfig().loiter_s if args.loiter is None
+                  else args.loiter),
+    )
     dash_cfg = DashboardConfig(
         host=args.host or os.environ.get("DASHBOARD_HOST", DashboardConfig().host),
         port=(args.port if args.port is not None
@@ -181,11 +196,12 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
         log=log_cfg,
         dashboard=dash_cfg,
         alert=alert_cfg,
+        track=track_cfg,
         zones=tuple(args.zone or ()),
         prefer_screen=args.screen,
         forced_url=args.url,
         enhance_enabled=args.enhance,
-        detect_enabled=args.detect,
+        detect_enabled=args.detect or args.track,
         log_events=args.log_events,
         dashboard_enabled=args.dashboard,
         log_level=args.log_level,
@@ -225,7 +241,8 @@ def main(argv: list[str] | None = None) -> int:
             config.enhance, config.enhance_enabled,
             config.detect, config.detect_enabled,
             config.log, config.log_events,
-            zones=config.zones, alert_config=config.alert)
+            zones=config.zones, alert_config=config.alert,
+            track_config=config.track)
     except KeyboardInterrupt:
         _log.info("Interrupted by operator.")
         source.release()
