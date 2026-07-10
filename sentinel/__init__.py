@@ -26,6 +26,7 @@ from .config import (
 )
 from .dedup import CooldownFilter, DedupStats
 from .detect import Detection, Detector, DetectorUnavailable
+from .scheduler import DetectionScheduler, ScheduleStats
 from .enhance import FrameEnhancer, benchmark, enhance_frame
 from .eventlog import EventLog, SessionSummary
 from .video import (
@@ -49,6 +50,8 @@ __all__ = [
     "DetectorUnavailable",
     "CooldownFilter",
     "DedupStats",
+    "DetectionScheduler",
+    "ScheduleStats",
     "EventLog",
     "SessionSummary",
     "FrameEnhancer",

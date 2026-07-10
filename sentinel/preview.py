@@ -21,6 +21,7 @@ import numpy as np
 from .config import CaptureConfig, DetectConfig, EnhanceConfig, LogConfig
 from .dedup import CooldownFilter
 from .detect import Detector, DetectorUnavailable
+from .scheduler import DetectionScheduler
 from .enhance import FrameEnhancer
 from .eventlog import EventLog
 from .logging_config import get_logger
@@ -68,9 +69,9 @@ def run_preview(
     fps = _FpsMeter()
 
     enhancer = FrameEnhancer(enhance_config or EnhanceConfig())
-    # Detector is constructed lazily on first enable so torch/weights are only
-    # loaded when detection is actually requested.
-    detector: Detector | None = None
+    # Detector (and its throttling scheduler) are constructed lazily on first
+    # enable so torch/weights are only loaded when detection is requested.
+    scheduler: DetectionScheduler | None = None
     detect_cfg = detect_config or DetectConfig()
     # Event log opens only when requested; logging implies detection.
     log_cfg = log_config or LogConfig()
@@ -102,15 +103,21 @@ def run_preview(
 
                 detections = []
                 if do_detect:
-                    if detector is None:
-                        detector = Detector(detect_cfg)
+                    if scheduler is None:
+                        scheduler = DetectionScheduler(
+                            Detector(detect_cfg),
+                            min_interval_s=detect_cfg.infer_min_interval_s,
+                            every_n=detect_cfg.infer_every_n)
                     try:
-                        processed, detections = detector.process(processed)
+                        processed, detections, ran = scheduler.process(processed)
                     except DetectorUnavailable as exc:
                         _log.error("%s", exc)
                         do_detect = False  # disable so we don't spam the log
+                        ran = False
                     last_count = len(detections)
-                    if event_log is not None and detections:
+                    # Only log on frames where inference actually ran — reused
+                    # detections are the same objects, not new sightings.
+                    if event_log is not None and ran and detections:
                         # Draw all detections, but only log those that clear the
                         # per-class cooldown (or all, if de-dup is disabled).
                         to_log = (dedup.filter(detections)
