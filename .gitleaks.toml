@@ -1,0 +1,11 @@
+title = "Sentinel gitleaks config"
+
+# Use gitleaks' built-in ruleset, plus the allowlist below.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore the committed example env (placeholders only, no secrets)"
+paths = [
+  '''\.env\.example$''',
+]
