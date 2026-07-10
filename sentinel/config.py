@@ -214,17 +214,23 @@ class DetectConfig:
 
 @dataclass(frozen=True)
 class LogConfig:
-    """Configuration for the SQLite event log (Phase 4).
-
-    The de-duplication cooldown is intentionally absent here — it is a follow-up
-    (T5, ``feature/log-dedup``). This issue (T4) covers only the schema + writer.
-    """
+    """Configuration for the SQLite event log (Phase 4) and its de-duplication."""
 
     # DB file path; excluded from git via the ``*.db`` ignore rule.
     db_path: str = "events.db"
 
     # Commit strategy: WAL keeps writes fast and readers (the dashboard) unblocked.
     use_wal: bool = True
+
+    # -- de-duplication (T5) --
+    # When enabled, a class is only re-logged after ``cooldown_s`` seconds, so the
+    # same object is not written on every consecutive frame.
+    dedup_enabled: bool = True
+    cooldown_s: float = 3.0
+
+    def __post_init__(self) -> None:
+        if self.cooldown_s < 0:
+            raise ValueError("cooldown_s must be non-negative.")
 
 
 @dataclass(frozen=True)

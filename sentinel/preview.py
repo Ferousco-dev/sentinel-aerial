@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 
 from .config import CaptureConfig, DetectConfig, EnhanceConfig, LogConfig
+from .dedup import CooldownFilter
 from .detect import Detector, DetectorUnavailable
 from .enhance import FrameEnhancer
 from .eventlog import EventLog
@@ -72,7 +73,11 @@ def run_preview(
     detector: Detector | None = None
     detect_cfg = detect_config or DetectConfig()
     # Event log opens only when requested; logging implies detection.
-    event_log = EventLog(log_config or LogConfig()) if log_enabled else None
+    log_cfg = log_config or LogConfig()
+    event_log = EventLog(log_cfg) if log_enabled else None
+    # Cooldown de-dup sits between detection and the log writer.
+    dedup = (CooldownFilter(log_cfg.cooldown_s)
+             if log_enabled and log_cfg.dedup_enabled else None)
     do_enhance = enhance_enabled
     do_detect = detect_enabled or log_enabled
     do_compare = False
@@ -106,7 +111,12 @@ def run_preview(
                         do_detect = False  # disable so we don't spam the log
                     last_count = len(detections)
                     if event_log is not None and detections:
-                        event_log.write_many(detections)
+                        # Draw all detections, but only log those that clear the
+                        # per-class cooldown (or all, if de-dup is disabled).
+                        to_log = (dedup.filter(detections)
+                                  if dedup is not None else detections)
+                        if to_log:
+                            event_log.write_many(to_log)
 
                 rate = fps.tick()
 
@@ -141,6 +151,11 @@ def run_preview(
             _log.info("Session %s logged %d detections across %d class(es).",
                       summary.session_id, summary.total,
                       len(summary.counts_by_class))
+            if dedup is not None:
+                s = dedup.stats
+                _log.info("De-dup: %d seen, %d logged, %d suppressed "
+                          "(cooldown %.1fs).",
+                          s.seen, s.logged, s.suppressed, log_cfg.cooldown_s)
             event_log.close()
         cv2.destroyAllWindows()
         _log.info("Preview stopped.")
