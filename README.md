@@ -94,9 +94,31 @@ raw-vs-enhanced split — the fastest way to demo the before/after on stage.
 
 ## Quick start
 
+### One-command launch
+
 ```bash
 git clone https://github.com/Ferousco-dev/sentinel-aerial.git
 cd sentinel-aerial
+./start.sh
+```
+
+`start.sh` creates a virtualenv, installs any missing dependencies, and boots the
+full pipeline (ingest → enhance → detect → log) with sensible defaults. Configure
+it with environment variables (or a gitignored `.env`):
+
+```bash
+SOURCE=screen REGION=100,100,640,480 ./start.sh   # phone-mirror capture
+URL=rtsp://192.168.1.1:554/live ./start.sh          # known stream URL
+LOG=0 ./start.sh                                    # detect but don't write events.db
+ENHANCE=0 DETECT=0 ./start.sh                       # raw feed only
+```
+
+Vars: `SOURCE` (`auto`|`screen`), `URL`, `REGION`, `ENHANCE`, `DETECT`, `LOG`,
+`LOG_LEVEL`. Extra args pass straight through: `./start.sh --log-level DEBUG`.
+
+### Manual launch
+
+```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
