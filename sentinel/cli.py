@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .config import AppConfig, CaptureConfig, LogConfig
+from .config import AppConfig, CaptureConfig, DetectConfig, LogConfig
 from .logging_config import configure, get_logger
 from .preview import run_preview
 from .video import open_source
@@ -70,6 +70,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Per-class de-dup cooldown in seconds (default: 3.0).",
     )
     parser.add_argument(
+        "--infer-interval", type=float, default=None, metavar="SECONDS",
+        help="Min seconds between inferences; skipped frames reuse the last "
+             "result (default: 0.15). Set 0 to detect on every frame.",
+    )
+    parser.add_argument(
         "--log-level", default="INFO",
         choices=("DEBUG", "INFO", "WARNING", "ERROR"),
         help="Logging verbosity (default: INFO).",
@@ -81,6 +86,10 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
     """Parse ``argv`` into an :class:`AppConfig` (pure; no side effects)."""
     args = _build_parser().parse_args(argv)
     capture = CaptureConfig(screen_region=args.region)
+    detect_cfg = DetectConfig(
+        infer_min_interval_s=DetectConfig().infer_min_interval_s
+        if args.infer_interval is None else args.infer_interval,
+    )
     log_cfg = LogConfig(
         dedup_enabled=not args.no_dedup,
         cooldown_s=LogConfig().cooldown_s if args.cooldown is None
@@ -88,6 +97,7 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
     )
     return AppConfig(
         capture=capture,
+        detect=detect_cfg,
         log=log_cfg,
         prefer_screen=args.screen,
         forced_url=args.url,
