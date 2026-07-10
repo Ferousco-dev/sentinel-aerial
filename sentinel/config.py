@@ -177,13 +177,51 @@ class EnhanceConfig:
 
 
 @dataclass(frozen=True)
+class DetectConfig:
+    """Parameters for the YOLOv8n detection stage.
+
+    Kept intentionally small for this issue (T1): model selection, a global
+    confidence floor, device, and draw styling. The configurable class allowlist
+    and per-class thresholds are a follow-up (T2, ``feature/detection-config``).
+    """
+
+    # Weights: 'yolov8n.pt' is the ~6 MB nano model, auto-downloaded on first
+    # use. A path to a local .pt also works and keeps the repo weight-free.
+    model_name: str = "yolov8n.pt"
+
+    # Global confidence floor; detections below this are discarded.
+    confidence: float = 0.35
+
+    # Intersection-over-union threshold for non-max suppression.
+    iou: float = 0.45
+
+    # 'cpu', 'cuda', 'mps', or None to let ultralytics choose. Laptop demo → cpu.
+    device: str | None = "cpu"
+
+    # Cap on detections per frame (guards pathological scenes).
+    max_detections: int = 100
+
+    # Box/label draw styling.
+    box_thickness: int = 2
+    font_scale: float = 0.5
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence must be in [0, 1].")
+        if not 0.0 <= self.iou <= 1.0:
+            raise ValueError("iou must be in [0, 1].")
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Top-level aggregate passed through the CLI."""
 
     discovery: DiscoveryConfig = field(default_factory=DiscoveryConfig)
     capture: CaptureConfig = field(default_factory=CaptureConfig)
     enhance: EnhanceConfig = field(default_factory=EnhanceConfig)
+    detect: DetectConfig = field(default_factory=DetectConfig)
     prefer_screen: bool = False
     forced_url: str | None = None
     enhance_enabled: bool = False
+    detect_enabled: bool = False
     log_level: str = "INFO"
