@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Engineering workflow
+    url: https://github.com/Ferousco-dev/sentinel-aerial/blob/main/docs/ENGINEERING_WORKFLOW.md
+    about: Read the branch/PR/review/release process before opening an issue.

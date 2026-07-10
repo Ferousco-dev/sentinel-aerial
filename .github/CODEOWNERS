@@ -1,0 +1,16 @@
+# Code ownership — every PR touching these paths requests review from the owner.
+# As the team grows, add teammates per subsystem instead of a single owner.
+
+# Global fallback owner.
+*                       @Ferousco-dev
+
+# Ingest subsystem.
+/sentinel/video/        @Ferousco-dev
+
+# Enhancement / detection / AI.
+/sentinel/enhance.py    @Ferousco-dev
+/sentinel/detect.py     @Ferousco-dev
+
+# Build, CI, and governance.
+/.github/               @Ferousco-dev
+/pyproject.toml         @Ferousco-dev

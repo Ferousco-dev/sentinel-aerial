@@ -1,0 +1,49 @@
+name: "🐛 Bug report"
+description: Something is broken or behaves incorrectly
+title: "fix: <concise summary>"
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Actual behaviour, including full error output / logs.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, drone model / stream URL, source mode (stream vs screen).
+      value: |
+        - OS:
+        - Python:
+        - Source mode:
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - high priority
+        - medium priority
+        - low priority
+    validations:
+      required: true
