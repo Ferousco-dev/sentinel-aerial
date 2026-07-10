@@ -21,10 +21,12 @@ from .config import (
     DiscoveryConfig,
     EnhanceConfig,
     EnhanceQuality,
+    LogConfig,
     SourceKind,
 )
 from .detect import Detection, Detector, DetectorUnavailable
 from .enhance import FrameEnhancer, benchmark, enhance_frame
+from .eventlog import EventLog, SessionSummary
 from .video import (
     FrameSource,
     ScreenSource,
@@ -39,10 +41,13 @@ __all__ = [
     "DiscoveryConfig",
     "EnhanceConfig",
     "EnhanceQuality",
+    "LogConfig",
     "SourceKind",
     "Detector",
     "Detection",
     "DetectorUnavailable",
+    "EventLog",
+    "SessionSummary",
     "FrameEnhancer",
     "enhance_frame",
     "benchmark",

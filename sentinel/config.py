@@ -213,6 +213,21 @@ class DetectConfig:
 
 
 @dataclass(frozen=True)
+class LogConfig:
+    """Configuration for the SQLite event log (Phase 4).
+
+    The de-duplication cooldown is intentionally absent here — it is a follow-up
+    (T5, ``feature/log-dedup``). This issue (T4) covers only the schema + writer.
+    """
+
+    # DB file path; excluded from git via the ``*.db`` ignore rule.
+    db_path: str = "events.db"
+
+    # Commit strategy: WAL keeps writes fast and readers (the dashboard) unblocked.
+    use_wal: bool = True
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Top-level aggregate passed through the CLI."""
 
@@ -220,8 +235,10 @@ class AppConfig:
     capture: CaptureConfig = field(default_factory=CaptureConfig)
     enhance: EnhanceConfig = field(default_factory=EnhanceConfig)
     detect: DetectConfig = field(default_factory=DetectConfig)
+    log: LogConfig = field(default_factory=LogConfig)
     prefer_screen: bool = False
     forced_url: str | None = None
     enhance_enabled: bool = False
     detect_enabled: bool = False
+    log_events: bool = False
     log_level: str = "INFO"
