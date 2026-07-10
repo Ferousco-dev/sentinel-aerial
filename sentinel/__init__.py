@@ -24,6 +24,7 @@ from .config import (
     LogConfig,
     SourceKind,
 )
+from .dedup import CooldownFilter, DedupStats
 from .detect import Detection, Detector, DetectorUnavailable
 from .enhance import FrameEnhancer, benchmark, enhance_frame
 from .eventlog import EventLog, SessionSummary
@@ -46,6 +47,8 @@ __all__ = [
     "Detector",
     "Detection",
     "DetectorUnavailable",
+    "CooldownFilter",
+    "DedupStats",
     "EventLog",
     "SessionSummary",
     "FrameEnhancer",
