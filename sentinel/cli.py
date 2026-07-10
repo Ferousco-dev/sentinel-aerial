@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .config import AppConfig, CaptureConfig
+from .config import AppConfig, CaptureConfig, LogConfig
 from .logging_config import configure, get_logger
 from .preview import run_preview
 from .video import open_source
@@ -62,6 +62,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Log detections to SQLite (implies --detect).",
     )
     parser.add_argument(
+        "--no-dedup", action="store_true",
+        help="Log every detection (disable the per-class cooldown filter).",
+    )
+    parser.add_argument(
+        "--cooldown", type=float, default=None, metavar="SECONDS",
+        help="Per-class de-dup cooldown in seconds (default: 3.0).",
+    )
+    parser.add_argument(
         "--log-level", default="INFO",
         choices=("DEBUG", "INFO", "WARNING", "ERROR"),
         help="Logging verbosity (default: INFO).",
@@ -73,8 +81,14 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
     """Parse ``argv`` into an :class:`AppConfig` (pure; no side effects)."""
     args = _build_parser().parse_args(argv)
     capture = CaptureConfig(screen_region=args.region)
+    log_cfg = LogConfig(
+        dedup_enabled=not args.no_dedup,
+        cooldown_s=LogConfig().cooldown_s if args.cooldown is None
+        else args.cooldown,
+    )
     return AppConfig(
         capture=capture,
+        log=log_cfg,
         prefer_screen=args.screen,
         forced_url=args.url,
         enhance_enabled=args.enhance,
