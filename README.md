@@ -27,7 +27,7 @@ ingest  ->  enhance  ->  detect  ->  log  ->  serve  ->  alert  ->  report
 | Phase | Stage    | Capability                                                        | State |
 |:-----:|----------|-------------------------------------------------------------------|:-----:|
 | 1     | ingest   | Stream discovery + transport-agnostic frame source with fallback  | ✅ Done |
-| 2     | enhance  | Denoise → CLAHE contrast → unsharp mask, near real-time on CPU     | ⏳ Next |
+| 2     | enhance  | Denoise → CLAHE contrast → unsharp mask, adaptive real-time on CPU | ✅ Done |
 | 3     | detect   | YOLOv8n detection (person/car/…), structured per-frame results    | ⏳     |
 | 4     | log      | SQLite event log with per-class de-duplication cooldown           | ⏳     |
 | 5     | serve    | FastAPI + WebSocket dashboard (live video, event feed, counters)  | ⏳     |
@@ -54,12 +54,41 @@ depends on:
 Sources are iterables and context managers, so the whole pipeline reads as:
 
 ```python
-from sentinel import DiscoveryConfig, CaptureConfig, open_source
+from sentinel import DiscoveryConfig, CaptureConfig, open_source, FrameEnhancer
 
+enhancer = FrameEnhancer()                       # reused CLAHE + adaptive control
 with open_source(DiscoveryConfig(), CaptureConfig()) as feed:
-    for frame in feed:        # frame is a BGR numpy array
-        ...                   # enhance -> detect -> log -> serve
+    for frame in feed:                           # frame is a BGR numpy array
+        clean = enhancer.process(frame)          # denoise -> CLAHE -> unsharp
+        ...                                      # detect -> log -> serve
 ```
+
+### Phase 2 design
+
+The enhancer (`sentinel.enhance`) is a stateful, reusable stage
+(`FrameEnhancer`) that builds its CLAHE operator once and runs
+`denoise → CLAHE local contrast → unsharp mask` per frame. Two things keep it
+real-time on a laptop CPU:
+
+- **Reused state** — CLAHE operator and kernels are constructed once, not per
+  frame.
+- **Adaptive quality** — `fastNlMeansDenoisingColored` is ~100× the cost of the
+  other stages (measured ~130 ms vs ~1 ms at 640×480). An `AdaptiveController`
+  keeps a **per-tier** latency estimate and slides the pipeline along a ladder
+  (`FULL → FAST → LIGHT → BYPASS`) to hold the configured FPS budget. Because it
+  remembers each tier's cost, it will not oscillate back into a tier it has
+  learned is too expensive — it converges to the best tier that fits and stays
+  there.
+
+Right-size the budget for your demo machine first:
+
+```bash
+python -m sentinel.enhance 640 480      # benchmark each tier's latency/FPS
+python -m sentinel --enhance            # run the feed with enhancement on
+```
+
+In the preview window: **`e`** toggles enhancement, **`c`** shows a live
+raw-vs-enhanced split — the fastest way to demo the before/after on stage.
 
 ---
 

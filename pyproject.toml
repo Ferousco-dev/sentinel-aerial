@@ -7,7 +7,7 @@ name = "sentinel-aerial"
 version = "0.1.0"
 description = "AI Aerial Surveillance & Response System — a software-only surveillance brain for closed WiFi FPV toy drones."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 license = { text = "MIT" }
 keywords = ["surveillance", "computer-vision", "drone", "opencv", "yolo", "fastapi"]
 

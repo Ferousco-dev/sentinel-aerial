@@ -51,6 +51,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Screen region 'left,top,width,height' (default: full monitor).",
     )
     parser.add_argument(
+        "--enhance", action="store_true",
+        help="Start with the Phase 2 enhancement pipeline enabled.",
+    )
+    parser.add_argument(
         "--log-level", default="INFO",
         choices=("DEBUG", "INFO", "WARNING", "ERROR"),
         help="Logging verbosity (default: INFO).",
@@ -66,6 +70,7 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
         capture=capture,
         prefer_screen=args.screen,
         forced_url=args.url,
+        enhance_enabled=args.enhance,
         log_level=args.log_level,
     )
 
@@ -87,7 +92,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        run_preview(source, config.capture)
+        run_preview(
+            source, config.capture, config.enhance, config.enhance_enabled)
     except KeyboardInterrupt:
         _log.info("Interrupted by operator.")
         source.release()
