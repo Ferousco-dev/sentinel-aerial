@@ -18,6 +18,7 @@ from .config import (
     DashboardConfig,
     DetectConfig,
     LogConfig,
+    Zone,
 )
 from .logging_config import configure, get_logger
 from .preview import run_preview
@@ -37,6 +38,23 @@ def _parse_region(raw: str) -> tuple[int, int, int, int]:
     if width <= 0 or height <= 0:
         raise argparse.ArgumentTypeError("region width/height must be positive")
     return left, top, width, height
+
+
+def _parse_zone(raw: str) -> Zone:
+    """Parse 'x1,y1,x2,y2[:name]' into a Zone."""
+    spec, _, name = raw.partition(":")
+    parts = spec.split(",")
+    if len(parts) != 4:
+        raise argparse.ArgumentTypeError(
+            "zone must be 'x1,y1,x2,y2[:name]'")
+    try:
+        x1, y1, x2, y2 = (int(p) for p in parts)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("zone coords must be integers") from exc
+    try:
+        return Zone(name=name or f"zone{x1}_{y1}", x1=x1, y1=y1, x2=x2, y2=y2)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -91,6 +109,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Detection confidence threshold in [0,1] (default: 0.35).",
     )
     parser.add_argument(
+        "--zone", type=_parse_zone, action="append", default=None,
+        metavar="x1,y1,x2,y2[:name]",
+        help="Define a restricted zone (repeatable). "
+             "e.g. --zone 100,80,400,360:north",
+    )
+    parser.add_argument(
         "--dashboard", action="store_true",
         help="Serve the live web dashboard instead of the desktop preview.",
     )
@@ -142,6 +166,7 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
         detect=detect_cfg,
         log=log_cfg,
         dashboard=dash_cfg,
+        zones=tuple(args.zone or ()),
         prefer_screen=args.screen,
         forced_url=args.url,
         enhance_enabled=args.enhance,
@@ -184,7 +209,8 @@ def main(argv: list[str] | None = None) -> int:
             source, config.capture,
             config.enhance, config.enhance_enabled,
             config.detect, config.detect_enabled,
-            config.log, config.log_events)
+            config.log, config.log_events,
+            zones=config.zones)
     except KeyboardInterrupt:
         _log.info("Interrupted by operator.")
         source.release()
