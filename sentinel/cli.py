@@ -75,6 +75,15 @@ def _build_parser() -> argparse.ArgumentParser:
              "result (default: 0.15). Set 0 to detect on every frame.",
     )
     parser.add_argument(
+        "--classes", default=None, metavar="LIST",
+        help="Comma-separated class allowlist (e.g. 'person,car'), or 'all' to "
+             "keep every class. Default: person,bicycle,car,motorcycle,bus,truck.",
+    )
+    parser.add_argument(
+        "--conf", type=float, default=None, metavar="FLOAT",
+        help="Detection confidence threshold in [0,1] (default: 0.35).",
+    )
+    parser.add_argument(
         "--log-level", default="INFO",
         choices=("DEBUG", "INFO", "WARNING", "ERROR"),
         help="Logging verbosity (default: INFO).",
@@ -86,8 +95,17 @@ def build_config(argv: list[str] | None = None) -> AppConfig:
     """Parse ``argv`` into an :class:`AppConfig` (pure; no side effects)."""
     args = _build_parser().parse_args(argv)
     capture = CaptureConfig(screen_region=args.region)
+    _defaults = DetectConfig()
+    if args.classes is None:
+        allowlist = _defaults.class_allowlist
+    elif args.classes.strip().lower() == "all":
+        allowlist = None
+    else:
+        allowlist = tuple(c.strip() for c in args.classes.split(",") if c.strip())
     detect_cfg = DetectConfig(
-        infer_min_interval_s=DetectConfig().infer_min_interval_s
+        confidence=_defaults.confidence if args.conf is None else args.conf,
+        class_allowlist=allowlist,
+        infer_min_interval_s=_defaults.infer_min_interval_s
         if args.infer_interval is None else args.infer_interval,
     )
     log_cfg = LogConfig(

@@ -25,7 +25,7 @@ from .config import (
     SourceKind,
 )
 from .dedup import CooldownFilter, DedupStats
-from .detect import Detection, Detector, DetectorUnavailable
+from .detect import Detection, Detector, DetectorUnavailable, filter_by_class
 from .scheduler import DetectionScheduler, ScheduleStats
 from .enhance import FrameEnhancer, benchmark, enhance_frame
 from .eventlog import EventLog, SessionSummary
@@ -48,6 +48,7 @@ __all__ = [
     "Detector",
     "Detection",
     "DetectorUnavailable",
+    "filter_by_class",
     "CooldownFilter",
     "DedupStats",
     "DetectionScheduler",

@@ -34,6 +34,19 @@ class DetectorUnavailable(RuntimeError):
     """Raised when the detection backend (ultralytics/torch) cannot be loaded."""
 
 
+def filter_by_class(detections: list["Detection"],
+                    allowlist: tuple[str, ...] | None) -> list["Detection"]:
+    """Return only detections whose class is in ``allowlist``.
+
+    ``allowlist is None`` keeps everything. Pure and side-effect free so it can
+    be unit-tested without loading a model.
+    """
+    if allowlist is None:
+        return list(detections)
+    allowed = set(allowlist)
+    return [d for d in detections if d.cls_name in allowed]
+
+
 @dataclass(frozen=True)
 class Detection:
     """One detected object in a single frame.
@@ -84,6 +97,8 @@ class Detector:
         self._cfg = config or DetectConfig()
         self._model = None          # loaded lazily
         self._names: dict[int, str] = {}
+        # COCO ids matching the allowlist, resolved once the model is loaded.
+        self._allow_ids: list[int] | None = None
 
     # -- lifecycle ----------------------------------------------------------
     def _ensure_model(self) -> None:
@@ -106,7 +121,21 @@ class Detector:
         self._model = YOLO(self._cfg.model_name)
         # model.names maps class-id -> label; cache it for structured output.
         self._names = dict(self._model.names)
-        _log.info("Detector ready: %d classes.", len(self._names))
+
+        # Resolve the class allowlist to COCO ids so predict() can restrict NMS
+        # to just those classes. Warn about names the model doesn't know.
+        allowlist = self._cfg.class_allowlist
+        if allowlist is not None:
+            name_to_id = {name: cid for cid, name in self._names.items()}
+            unknown = [n for n in allowlist if n not in name_to_id]
+            if unknown:
+                _log.warning("Allowlist classes not in model: %s",
+                             ", ".join(unknown))
+            self._allow_ids = [name_to_id[n] for n in allowlist
+                               if n in name_to_id]
+        _log.info("Detector ready: %d classes%s.", len(self._names),
+                  "" if allowlist is None
+                  else f", filtering to {len(self._allow_ids or [])}")
 
     @property
     def class_names(self) -> dict[int, str]:
@@ -123,6 +152,7 @@ class Detector:
             iou=self._cfg.iou,
             device=self._cfg.device,
             max_det=self._cfg.max_detections,
+            classes=self._allow_ids,     # None = all classes
             verbose=False,
         )
         if not results:
@@ -145,7 +175,9 @@ class Detector:
                 confidence=float(conf),
                 bbox=(int(x1), int(y1), int(x2), int(y2)),
             ))
-        return detections
+        # Defensive guard: even though predict() was restricted via classes=,
+        # filter again by name so the allowlist is authoritative.
+        return filter_by_class(detections, self._cfg.class_allowlist)
 
     # -- rendering ----------------------------------------------------------
     def annotate(self, frame: Frame, detections: list[Detection]) -> Frame:
