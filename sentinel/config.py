@@ -273,6 +273,31 @@ class DashboardConfig:
 
 
 @dataclass(frozen=True)
+class AlertConfig:
+    """Configuration for outbound breach alerts (Telegram).
+
+    Credentials are NOT stored here — the token and chat id are read from the
+    environment (``TELEGRAM_BOT_TOKEN`` / ``TELEGRAM_CHAT_ID``) so secrets never
+    live in config objects or the repo.
+    """
+
+    enabled: bool = True
+    # Per-zone minimum seconds between Telegram alerts, so a lingering intruder
+    # doesn't spam the channel.
+    cooldown_s: float = 30.0
+    # JPEG quality for the snapshot attached to the alert.
+    jpeg_quality: int = 80
+    # HTTP timeout for the Telegram API call.
+    timeout_s: float = 10.0
+
+    def __post_init__(self) -> None:
+        if self.cooldown_s < 0:
+            raise ValueError("cooldown_s must be non-negative.")
+        if not 1 <= self.jpeg_quality <= 100:
+            raise ValueError("jpeg_quality must be in 1..100.")
+
+
+@dataclass(frozen=True)
 class Zone:
     """A rectangular restricted area in pixel coordinates.
 
@@ -315,6 +340,7 @@ class AppConfig:
     detect: DetectConfig = field(default_factory=DetectConfig)
     log: LogConfig = field(default_factory=LogConfig)
     dashboard: DashboardConfig = field(default_factory=DashboardConfig)
+    alert: AlertConfig = field(default_factory=AlertConfig)
     zones: tuple[Zone, ...] = ()
     prefer_screen: bool = False
     forced_url: str | None = None
